@@ -18,7 +18,6 @@ from flask import flash
 from flask import Flask, render_template, request, redirect, url_for
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
 from werkzeug.security import check_password_hash
-import pyodbc
 import calendar
 import os
 import secrets
@@ -34,6 +33,7 @@ from flask_limiter.util import get_remote_address
 from PIL import Image
 from datetime import timedelta
 from flask import g
+from flask_sqlalchemy import SQLAlchemy
 
 
 
@@ -78,14 +78,11 @@ def senha_forte(senha):
     )
 
 
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# 🔌 Configuração SQL Server
-conn_str = (
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=localhost;"
-    "DATABASE=SiteAuth;"
-    "Trusted_Connection=yes;"
-)
+db = SQLAlchemy(app)
+
 
 # 🔐 Login Manager
 login_manager = LoginManager()
