@@ -17,6 +17,10 @@ from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image
+from sqlalchemy import extract
+from sqlalchemy import select, extract, case
+
+
 
 
 # =========================
@@ -42,9 +46,11 @@ if not secret:
     raise RuntimeError("Defina a variável de ambiente SECRET_KEY")
 app.secret_key = secret
 
+
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+
 
 UPLOAD_FOLDER = "static/uploads/users"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
@@ -139,15 +145,28 @@ def security_headers(response):
 # =========================
 
 @app.route("/", methods=["GET", "POST"])
-@limiter.limit("5 per minute", methods=["POST"])
+@limiter.limit(
+    "6 per minute",
+    methods=["POST"],
+    error_message="Muitas tentativas de login. Aguarde cerca de 1 minuto e tente novamente."
+)
 @limiter.limit("20 per minute", methods=["GET"])
 def login():
     if request.method == "POST":
-        user = User.query.filter_by(username=request.form["username"]).first()
-        if user and check_password_hash(user.password_hash, request.form["password"]):
+        username = request.form["username"]
+        password = request.form["password"]
+
+        # Busca o usuário pelo username (equivalente ao SELECT do SQL Server)
+        user = User.query.filter_by(username=username).first()
+
+        # Validação exatamente igual à anterior
+        if user and check_password_hash(user.password_hash, password):
             login_user(user)
             return redirect(url_for("dashboard"))
+
         flash("Usuário ou senha inválidos", "error")
+        return redirect(url_for("login"))
+
     return render_template("login.html")
 
 
@@ -155,37 +174,69 @@ def login():
 @login_required
 def dashboard():
     hoje = datetime.today()
-    mes = request.args.get("mes", hoje.month, type=int)
-    ano = request.args.get("ano", hoje.year, type=int)
 
+    mes = request.args.get("mes", type=int)
+    ano = request.args.get("ano", type=int)
+
+    if not mes or not ano:
+        mes = hoje.month
+        ano = hoje.year
+
+    nome_mes = MESES_PT[mes]
+    total_dias = calendar.monthrange(ano, mes)[1]
+    dias = list(range(1, total_dias + 1))
+
+    # Buscar escalas do mês (equivalente ao SELECT com MONTH / YEAR)
     registros = (
         Escala.query
-        .filter(db.extract("month", Escala.data) == mes)
-        .filter(db.extract("year", Escala.data) == ano)
+        .filter(
+            extract("month", Escala.data) == mes,
+            extract("year", Escala.data) == ano
+        )
         .order_by(Escala.data, Escala.horario)
         .all()
     )
 
     escalas = {}
-    for e in registros:
-        escalas.setdefault(e.data.day, []).append({
-            "tipo": e.tipo,
-            "evento": e.evento,
-            "horario": e.horario.strftime("%H:%M") if e.horario else ""
+
+    for row in registros:
+        dia = row.data.day
+
+        if dia not in escalas:
+            escalas[dia] = []
+
+        escalas[dia].append({
+            "tipo": row.tipo,
+            "evento": row.evento,
+            "horario": row.horario.strftime("%H:%M") if row.horario else None
         })
+
+    # mês anterior
+    mes_anterior = mes - 1
+    ano_anterior = ano
+    if mes_anterior == 0:
+        mes_anterior = 12
+        ano_anterior -= 1
+
+    # próximo mês
+    mes_proximo = mes + 1
+    ano_proximo = ano
+    if mes_proximo == 13:
+        mes_proximo = 1
+        ano_proximo += 1
 
     return render_template(
         "dashboard.html",
-        dias=range(1, calendar.monthrange(ano, mes)[1] + 1),
-        nome_mes=MESES_PT[mes],
+        dias=dias,
+        nome_mes=nome_mes,
         usuario=current_user.username,
         escalas=escalas,
         mes=mes,
         ano=ano,
-        mes_anterior=12 if mes == 1 else mes - 1,
-        ano_anterior=ano - 1 if mes == 1 else ano,
-        mes_proximo=1 if mes == 12 else mes + 1,
-        ano_proximo=ano + 1 if mes == 12 else ano
+        mes_anterior=mes_anterior,
+        ano_anterior=ano_anterior,
+        mes_proximo=mes_proximo,
+        ano_proximo=ano_proximo
     )
 
 
@@ -193,145 +244,54 @@ def dashboard():
 @login_required
 def minhas_escalas():
     hoje = datetime.today()
-    mes = request.args.get("mes", hoje.month, type=int)
-    ano = request.args.get("ano", hoje.year, type=int)
 
-    registros = (
-        UsuarioEscala.query
-        .join(Escala)
-        .filter(UsuarioEscala.user_id == current_user.id)
-        .filter(db.extract("month", Escala.data) == mes)
-        .filter(db.extract("year", Escala.data) == ano)
+    mes = request.args.get("mes", type=int)
+    ano = request.args.get("ano", type=int)
+
+    if not mes or not ano:
+        mes = hoje.month
+        ano = hoje.year
+
+    nome_mes = MESES_PT[mes]
+
+    stmt = (
+        select(
+            extract("day", Escala.data).label("Dia"),
+            UsuarioEscala.funcao.label("Funcao"),
+            case(
+                (Escala.horario.is_(None), ""),
+                else_=Escala.horario
+            ).label("Horario"),
+            Escala.evento.label("Evento")
+        )
+        .join(Escala, UsuarioEscala.escala_id == Escala.id)
+        .where(
+            UsuarioEscala.user_id == current_user.id,
+            extract("month", Escala.data) == mes,
+            extract("year", Escala.data) == ano
+        )
         .order_by(Escala.data, Escala.horario)
-        .all()
     )
 
-    return render_template("minhas_escalas.html", escalas=registros, nome_mes=MESES_PT[mes])
+    result = db.session.execute(stmt).all()
 
-
-@app.route("/admin/escalas", methods=["GET", "POST"])
-@login_required
-def admin_escalas():
-    if not current_user.is_admin:
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST" and request.form.get("acao") == "criar_escala":
-        escala = Escala(
-            data=datetime.strptime(request.form["data"], "%Y-%m-%d").date(),
-            tipo=request.form["tipo"],
-            evento=request.form["evento"],
-            horario=datetime.strptime(request.form["horario"], "%H:%M").time()
-        )
-        db.session.add(escala)
-        db.session.commit()
-        flash("Escala criada", "success")
-
-    escalas = Escala.query.order_by(Escala.data).all()
-    usuarios = User.query.order_by(User.username).all()
-    return render_template("admin_escalas.html", escalas=escalas, usuarios=usuarios)
-
-
-@app.route("/admin/visao-escalas")
-@login_required
-def admin_visao_escalas():
-    if not current_user.is_admin:
-        return redirect(url_for("dashboard"))
-
-    registros = UsuarioEscala.query.join(User).join(Escala).all()
-    return render_template("admin_visao_escalas.html", registros=registros)
-
-
-@app.route("/admin/remover-atribuicao", methods=["POST"])
-@login_required
-def remover_atribuicao():
-    if not current_user.is_admin:
-        abort(403)
-
-    registro = UsuarioEscala.query.get(request.form["usuario_escala_id"])
-    if registro:
-        db.session.delete(registro)
-        db.session.commit()
-        flash("Atribuição removida", "success")
-    return redirect(url_for("admin_visao_escalas"))
-
-
-@app.route("/perfil", methods=["GET", "POST"])
-@login_required
-def perfil():
-    if request.method == "POST":
-        file = request.files.get("photo")
-        if not file or not allowed_file(file.filename):
-            flash("Arquivo inválido", "error")
-            return redirect(url_for("perfil"))
-
-        filename = f"user_{current_user.id}.jpg"
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        img = Image.open(file).convert("RGB")
-        img.thumbnail((500, 500))
-        img.save(path, "JPEG")
-
-        current_user.photo_path = f"/static/uploads/users/{filename}"
-        db.session.commit()
-        flash("Foto atualizada", "success")
-
-    return render_template("perfil.html")
-
-
-@app.route("/admin/usuarios", methods=["GET", "POST"])
-@login_required
-def admin_usuarios():
-    if not current_user.is_super_admin:
-        abort(403)
-
-    if request.method == "POST":
-        acao = request.form["acao"]
-
-        if acao == "criar":
-            user = User(
-                username=request.form["username"],
-                password_hash=generate_password_hash(request.form["password"]),
-                is_admin=request.form["role"] == "admin"
+    # Ajuste final do Horario para string HH:MM (igual ao CONVERT do SQL Server)
+    escalas = []
+    for row in result:
+        escalas.append(
+            type(row)(
+                Dia=row.Dia,
+                Funcao=row.Funcao,
+                Horario=row.Horario.strftime("%H:%M") if row.Horario else "",
+                Evento=row.Evento
             )
-            db.session.add(user)
-            db.session.commit()
-            flash("Usuário criado", "success")
+        )
 
-
-        elif acao == "trocar_senha":
-            user = User.query.get(request.form["user_id"])
-            user.password_hash = generate_password_hash(request.form["nova_senha"])
-            db.session.commit()
-            flash("Senha alterada", "success")
-
-        elif acao == "excluir_usuario":
-            user = User.query.get(request.form["user_id"])
-            if user.id != current_user.id and not user.is_super_admin:
-                db.session.delete(user)
-                db.session.commit()
-                flash("Usuário excluído", "success")
-
-    usuarios = User.query.all()
-    return render_template("admin_usuarios.html", usuarios=usuarios)
-
-
-@app.route("/trocar-senha", methods=["GET", "POST"])
-@login_required
-def trocar_senha():
-    if request.method == "POST":
-        if not check_password_hash(current_user.password_hash, request.form["senha_atual"]):
-            flash("Senha atual incorreta", "error")
-            return redirect(url_for("trocar_senha"))
-
-        if not senha_forte(request.form["nova_senha"]):
-            flash("Senha fraca", "error")
-            return redirect(url_for("trocar_senha"))
-
-        current_user.password_hash = generate_password_hash(request.form["nova_senha"])
-        db.session.commit()
-        flash("Senha alterada", "success")
-        return redirect(url_for("dashboard"))
-
-    return render_template("trocar_senha.html")
+    return render_template(
+        "minhas_escalas.html",
+        escalas=escalas,
+        nome_mes=nome_mes
+    )
 
 
 @app.route("/logout")
@@ -341,12 +301,307 @@ def logout():
     return redirect(url_for("login"))
 
 
+
+@app.route("/admin/escalas", methods=["GET", "POST"])
+@login_required
+def admin_escalas():
+
+    if not current_user.is_admin:
+        return redirect(url_for("dashboard"))
+
+    # 🔹 Cadastro de nova escala
+    if request.method == "POST" and request.form.get("acao") == "criar_escala":
+        data = request.form["data"]
+        evento = request.form["evento"]
+        horario = request.form["horario"]
+        tipo = request.form["tipo"]
+
+        nova_escala = Escala(
+            data=data,
+            tipo=tipo,
+            evento=evento,
+            horario=horario if horario else None
+        )
+
+        db.session.add(nova_escala)
+        db.session.commit()
+
+        flash("Escala criada com sucesso!", "success")
+
+    # 🔹 Atribuir usuário à escala
+    if request.method == "POST" and request.form.get("acao") == "atribuir_usuario":
+        escala_id = request.form["escala_id"]
+        user_id = request.form["user_id"]
+        funcao = request.form["funcao"]
+
+        vinculo = UsuarioEscala(
+            user_id=user_id,
+            escala_id=escala_id,
+            funcao=funcao
+        )
+
+        db.session.add(vinculo)
+        db.session.commit()
+
+        flash("Usuário atribuído à escala com sucesso!", "success")
+
+    # 🔹 Buscar escalas do mês atual
+    hoje = date.today()
+    mes_atual = hoje.month
+    ano_atual = hoje.year
+
+    escalas = (
+        Escala.query
+        .filter(
+            extract("month", Escala.data) == mes_atual,
+            extract("year", Escala.data) == ano_atual
+        )
+        .order_by(Escala.data)
+        .all()
+    )
+
+    # 🔹 Buscar usuários
+    usuarios = (
+        User.query
+        .order_by(User.username)
+        .all()
+    )
+
+    return render_template(
+        "admin_escalas.html",
+        escalas=escalas,
+        usuarios=usuarios
+    )
+
+
+
+@app.route("/admin/visao-escalas")
+@login_required
+def admin_visao_escalas():
+
+    if not current_user.is_admin:
+        return redirect(url_for("dashboard"))
+
+    hoje = date.today()
+    mes_atual = hoje.month
+    ano_atual = hoje.year
+
+    stmt = (
+        select(
+            UsuarioEscala.id.label("UsuarioEscalaId"),
+            User.username.label("Username"),
+            Escala.data.label("Data"),
+            Escala.evento.label("Evento"),
+            Escala.tipo.label("Tipo"),
+            UsuarioEscala.funcao.label("Funcao"),
+            Escala.horario.label("Horario")
+        )
+        .join(User, User.id == UsuarioEscala.user_id)
+        .join(Escala, Escala.id == UsuarioEscala.escala_id)
+        .where(
+            extract("month", Escala.data) == mes_atual,
+            extract("year", Escala.data) == ano_atual
+        )
+        .order_by(Escala.data, User.username)
+    )
+
+    registros = db.session.execute(stmt).all()
+
+    return render_template(
+        "admin_visao_escalas.html",
+        registros=registros
+    )
+
+
+
+@app.route("/admin/remover-atribuicao", methods=["POST"])
+@login_required
+def remover_atribuicao():
+
+    if not current_user.is_admin:
+        return redirect(url_for("dashboard"))
+
+    usuario_escala_id = request.form.get("usuario_escala_id")
+
+    if usuario_escala_id:
+        registro = UsuarioEscala.query.get(usuario_escala_id)
+
+        if registro:
+            db.session.delete(registro)
+            db.session.commit()
+
+            flash("Atribuição removida com sucesso.", "success")
+
+    return redirect(url_for("admin_visao_escalas"))
+
+
+
+@app.route("/perfil", methods=["GET", "POST"])
+@login_required
+def perfil():
+    if request.method == "POST":
+        if "photo" not in request.files:
+            flash("Nenhum arquivo enviado", "error")
+            return redirect(url_for("perfil"))
+
+        file = request.files["photo"]
+
+        if file.filename == "":
+            flash("Nenhum arquivo selecionado", "error")
+            return redirect(url_for("perfil"))
+
+        if file and allowed_file(file.filename):
+            ext = file.filename.rsplit(".", 1)[1].lower()
+            filename = f"user_{current_user.id}.{ext}"
+
+            file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+
+            img = Image.open(file)
+            img = img.convert("RGB")
+            img.thumbnail((500, 500))
+            img.save(file_path, "JPEG")
+
+            db_path = f"/static/uploads/users/{filename}"
+
+            # 🔹 UPDATE no usuário (equivalente ao UPDATE do SQL Server)
+            current_user.photo_path = db_path
+            db.session.commit()
+
+            flash("Foto atualizada com sucesso", "success")
+            return redirect(url_for("perfil"))
+
+        flash("Formato de arquivo inválido", "error")
+        return redirect(url_for("perfil"))
+
+    return render_template("perfil.html")
+
+
+
+@app.route("/admin/usuarios", methods=["GET", "POST"])
+@login_required
+def admin_usuarios():
+    if not current_user.is_super_admin:
+        abort(403)
+
+    if request.method == "POST":
+        acao = request.form.get("acao")
+
+        # =====================
+        # CRIAR USUÁRIO
+        # =====================
+        if acao == "criar":
+            username = request.form["username"]
+            password = request.form["password"]
+            role = request.form["role"]
+
+            password_hash = generate_password_hash(password)
+            is_admin = True if role == "admin" else False
+            is_super_admin = False
+
+            novo_usuario = User(
+                username=username,
+                password_hash=password_hash,
+                is_admin=is_admin,
+                is_super_admin=is_super_admin
+            )
+
+            db.session.add(novo_usuario)
+            db.session.commit()
+
+            flash("Usuário cadastrado com sucesso!", "success")
+
+        # =====================
+        # TROCAR SENHA
+        # =====================
+        elif acao == "trocar_senha":
+            user_id = request.form["user_id"]
+            nova_senha = request.form["nova_senha"]
+
+            usuario = User.query.get(user_id)
+            if usuario:
+                usuario.password_hash = generate_password_hash(nova_senha)
+                db.session.commit()
+                flash("Senha redefinida com sucesso!", "success")
+
+        # =====================
+        # EXCLUIR USUÁRIO
+        # =====================
+        elif acao == "excluir_usuario":
+            user_id = int(request.form["user_id"])
+
+            # 🔒 PROTEÇÃO: não excluir a si mesmo
+            if user_id == current_user.id:
+                flash("Você não pode excluir o próprio usuário.", "error")
+            else:
+                usuario = User.query.filter_by(
+                    id=user_id,
+                    is_super_admin=False
+                ).first()
+
+                if not usuario:
+                    flash("Usuário não pode ser excluído.", "error")
+                else:
+                    db.session.delete(usuario)
+                    db.session.commit()
+                    flash("Usuário excluído com sucesso!", "success")
+
+    # =====================
+    # LISTAR USUÁRIOS
+    # =====================
+    usuarios = User.query.with_entities(
+        User.id,
+        User.username
+    ).all()
+
+    return render_template(
+        "admin_usuarios.html",
+        usuarios=usuarios
+    )
+
+
+@app.route("/trocar-senha", methods=["GET", "POST"])
+@login_required
+def trocar_senha():
+    if request.method == "POST":
+        senha_atual = request.form["senha_atual"]
+        nova_senha = request.form["nova_senha"]
+        confirmar_senha = request.form["confirmar_senha"]
+
+        # 1️⃣ Verifica senha atual
+        if not check_password_hash(current_user.password_hash, senha_atual):
+            flash("Senha atual incorreta.", "error")
+            return redirect(url_for("trocar_senha"))
+
+        # 2️⃣ Confirma nova senha
+        if nova_senha != confirmar_senha:
+            flash("As novas senhas não coincidem.", "error")
+            return redirect(url_for("trocar_senha"))
+
+        if not senha_forte(nova_senha):
+            flash("Senha fraca (mín. 8 caracteres e número)", "error")
+            return redirect(url_for("trocar_senha"))
+
+        # 3️⃣ Gera novo hash
+        novo_hash = generate_password_hash(nova_senha)
+
+        # 4️⃣ Atualiza no banco (equivalente ao UPDATE)
+        current_user.password_hash = novo_hash
+        db.session.commit()
+
+        flash("Senha alterada com sucesso!", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("trocar_senha.html")
+
+
+
+
 # =========================
 # INIT
 # =========================
 
-with app.app_context():
-    db.create_all()
+# with app.app_context():
+#     db.create_all()
 
 if __name__ == "__main__":
     app.run(debug=False)
