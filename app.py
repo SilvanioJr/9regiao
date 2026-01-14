@@ -287,17 +287,15 @@ def admin_usuarios():
         acao = request.form["acao"]
 
         if acao == "criar":
-            if not senha_forte(request.form["password"]):
-                flash("Senha fraca", "error")
-            else:
-                user = User(
-                    username=request.form["username"],
-                    password_hash=generate_password_hash(request.form["password"]),
-                    is_admin=request.form["role"] == "admin"
-                )
-                db.session.add(user)
-                db.session.commit()
-                flash("Usuário criado", "success")
+            user = User(
+                username=request.form["username"],
+                password_hash=generate_password_hash(request.form["password"]),
+                is_admin=request.form["role"] == "admin"
+            )
+            db.session.add(user)
+            db.session.commit()
+            flash("Usuário criado", "success")
+
 
         elif acao == "trocar_senha":
             user = User.query.get(request.form["user_id"])
