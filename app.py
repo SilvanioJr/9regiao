@@ -2,6 +2,9 @@ from datetime import date, datetime, timedelta
 import calendar
 import os
 import secrets
+import os
+from supabase import create_client
+
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -50,6 +53,11 @@ app.secret_key = secret
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
 UPLOAD_FOLDER = "static/uploads/users"
@@ -451,20 +459,25 @@ def perfil():
             return redirect(url_for("perfil"))
 
         if file and allowed_file(file.filename):
-            ext = file.filename.rsplit(".", 1)[1].lower()
-            filename = f"user_{current_user.id}.{ext}"
-
-            file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            filename = f"user_{current_user.id}.jpg"
 
             img = Image.open(file)
             img = img.convert("RGB")
             img.thumbnail((500, 500))
-            img.save(file_path, "JPEG")
 
-            db_path = f"/static/uploads/users/{filename}"
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            buf.seek(0)
 
-            # 🔹 UPDATE no usuário (equivalente ao UPDATE do SQL Server)
-            current_user.photo_path = db_path
+            supabase.storage.from_("avatars").upload(
+                filename,
+                buf.getvalue(),
+                {"content-type": "image/jpeg"}
+            )
+
+            public_url = supabase.storage.from_("avatars").get_public_url(filename)
+
+            current_user.photo_path = public_url
             db.session.commit()
 
             flash("Foto atualizada com sucesso", "success")

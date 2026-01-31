@@ -697,3 +697,11 @@ a.card:hover {
 .dashboard-header-title {
     text-align: center;
 }
+
+
+.perfil-foto{
+  width:120px;
+  height:120px;
+  border-radius:50%;
+  object-fit:cover;
+}
