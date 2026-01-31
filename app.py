@@ -4,6 +4,9 @@ import os
 import secrets
 import os
 from supabase import create_client
+from io import BytesIO
+from PIL import Image
+
 
 
 from flask import (
