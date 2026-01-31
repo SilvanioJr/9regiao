@@ -258,8 +258,8 @@ def minhas_escalas():
         select(
             extract("day", Escala.data).label("Dia"),
             UsuarioEscala.funcao.label("Funcao"),
-            case(
-                (Escala.horario.is_(None), ""),
+           case(
+                (Escala.horario.is_(None), None),
                 else_=Escala.horario
             ).label("Horario"),
             Escala.evento.label("Evento")
