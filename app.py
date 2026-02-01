@@ -672,7 +672,7 @@ def trocar_senha():
         db.session.commit()
 
         flash("Senha alterada com sucesso!", "success")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("perfil"))
 
     return render_template("trocar_senha.html")
 
