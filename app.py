@@ -595,6 +595,8 @@ def admin_usuarios():
                 if not usuario:
                     flash("Usuário não pode ser excluído.", "error")
                 else:
+                    # ✅ APAGA VÍNCULOS ANTES (resolve FK)
+                    UsuarioEscala.query.filter_by(user_id=user_id).delete()
                     db.session.delete(usuario)
                     db.session.commit()
                     flash("Usuário excluído com sucesso!", "success")
