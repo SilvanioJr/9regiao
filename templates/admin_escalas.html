@@ -66,38 +66,35 @@
 
     </div>
 
-    
-    <div class="card">
 
-        <h3>Escalas criadas (últimas 30)</h3>
+   <div class="card">
 
-        {% if escalas_lista %}
-            <div class="lista-escalas">
+        <h3>Excluir escala criada</h3>
+
+        <form method="POST" onsubmit="return confirmarExclusao();">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <label>Selecione a escala</label>
+            <select name="escala_id" id="escalaSelect" required>
+                <option value="">Selecione</option>
                 {% for e in escalas_lista %}
-                    <div class="linha-escala">
-
-                        <div class="info">
-                            <strong>{{ e.data.strftime('%d/%m/%Y') }}</strong>
-                            — {{ e.evento }}
-                            {% if e.horario %} • {{ e.horario.strftime('%H:%M') }}{% endif %}
-                            • {{ e.tipo }}
-                        </div>
-
-                        <form method="POST"
-                            action="{{ url_for('excluir_escala', escala_id=e.id) }}"
-                            onsubmit="return confirm('Tem certeza que deseja excluir esta escala?');">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn-excluir">🗑 Excluir</button>
-                        </form>
-
-                    </div>
+                    <option value="{{ e.id }}">
+                        {{ e.data.strftime('%d/%m/%Y') }}
+                        — {{ e.evento }}
+                        {% if e.horario %} · {{ e.horario.strftime('%H:%M') }}{% endif %}
+                        · {{ e.tipo }}
+                    </option>
                 {% endfor %}
-            </div>
-        {% else %}
-            <p>Nenhuma escala encontrada.</p>
-        {% endif %}
+            </select>
+
+            <button type="submit" formaction="{{ url_for('excluir_escala', escala_id=0) }}" id="btnExcluir">
+                🗑 Excluir escala
+            </button>
+
+        </form>
 
     </div>
+
 
 
     <div class="card">
@@ -153,6 +150,22 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+<script nonce="{{ g.csp_nonce }}">
+function confirmarExclusao() {
+    const select = document.getElementById("escalaSelect");
+    const escalaId = select.value;
+
+    if (!escalaId) {
+        alert("Selecione uma escala.");
+        return false;
+    }
+
+    const btn = document.getElementById("btnExcluir");
+    btn.formAction = "/admin_escalas/excluir/" + escalaId;
+
+    return confirm("Tem certeza que deseja excluir esta escala?");
+}
+</script>
 
 
 </body>
