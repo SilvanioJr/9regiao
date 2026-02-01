@@ -8,7 +8,6 @@ from io import BytesIO
 from PIL import Image
 
 
-
 from flask import (
     Flask, render_template, request, redirect,
     url_for, flash, abort, g
