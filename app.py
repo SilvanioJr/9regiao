@@ -540,28 +540,12 @@ def perfil():
 
             bucket = supabase.storage.from_("avatars")
 
-            try:
-                bucket.upload(
-                    filename,
-                    buf.getvalue(),
-                    {"content-type": "image/jpeg"}
-                )
-
-            except StorageApiError as e:
-                # e.args[0] costuma ser um dict tipo: {'statusCode': 409, ...}
-                info = e.args[0] if e.args and isinstance(e.args[0], dict) else {}
-
-                if info.get("statusCode") == 409:
-                    # arquivo já existe -> remove e sobe de novo
-                    bucket.remove([filename])
-
-                    bucket.upload(
-                        filename,
-                        buf.getvalue(),
-                        {"content-type": "image/jpeg"}
-                    )
-                else:
-                    raise
+            bucket.upload(
+                path=filename,
+                file=buf.getvalue(),
+                file_options={"content-type": "image/jpeg"},
+                upsert=True  # ⭐⭐⭐ ISSO AQUI É A CHAVE
+)
 
 
 
