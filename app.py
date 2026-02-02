@@ -9,7 +9,6 @@ from PIL import Image
 from storage3.exceptions import StorageApiError
 
 
-
 from flask import (
     Flask, render_template, request, redirect,
     url_for, flash, abort, g
@@ -539,14 +538,19 @@ def perfil():
             buf.seek(0)
 
             bucket = supabase.storage.from_("avatars")
+            data = buf.getvalue()
+
+            # se já existe, apaga primeiro (senão dá 409 Duplicate)
+            try:
+                bucket.remove([filename])
+            except Exception:
+                pass
 
             bucket.upload(
-                path=filename,
-                file=buf.getvalue(),
-                file_options={"content-type": "image/jpeg"},
-                upsert=True  # ⭐⭐⭐ ISSO AQUI É A CHAVE
+                filename,
+                data,
+                {"content-type": "image/jpeg"}
 )
-
 
 
             public_url = supabase.storage.from_("avatars").get_public_url(filename)
