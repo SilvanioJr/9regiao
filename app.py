@@ -92,6 +92,8 @@ class Escala(db.Model):
     tipo = db.Column(db.String(50))
     evento = db.Column(db.String(255))
     horario = db.Column(db.Time)
+    regiao_id = db.Column(db.Integer, db.ForeignKey("regioes.id"), nullable=True)
+
 
 
 class UsuarioEscala(db.Model):
