@@ -42,9 +42,11 @@ MESES_PT = {
 app = Flask(__name__)
 csrf = CSRFProtect(app)
 limiter = Limiter(app=app, key_func=get_remote_address)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = True  # <-- importante (HTTPS only)
 app.permanent_session_lifetime = timedelta(minutes=45)
 
 secret = os.environ.get("SECRET_KEY")
