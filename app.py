@@ -25,7 +25,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image
 from sqlalchemy import extract
 from sqlalchemy import select, extract, case
-
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 
