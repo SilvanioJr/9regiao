@@ -94,6 +94,7 @@ class User(db.Model, UserMixin):
     photo_path = db.Column(db.String(255))
     role = db.Column(db.String(30), nullable=False, default="user")
     regiao_id = db.Column(db.Integer, db.ForeignKey("regioes.id"), nullable=True)
+    nomePerfil = db.Column(db.String(150))  # ✅ nova coluna (pode ser nullable)
 
 
 
@@ -195,7 +196,7 @@ def force_custom_domain():
 @limiter.limit("20 per minute", methods=["GET"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
+        username = request.form["username"].strip().lower()
         password = request.form["password"]
 
         # Busca o usuário pelo username (equivalente ao SELECT do SQL Server)

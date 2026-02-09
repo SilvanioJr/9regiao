@@ -91,7 +91,7 @@
             <select name="user_id" required>
                 <option value="">Selecione</option>
                 {% for u in usuarios %}
-                    <option value="{{ u.id }}">{{ u.username }}</option>
+                    <option value="{{ u.id }}">{{ u.nomePerfil }}</option>
                 {% endfor %}
             </select>
 
