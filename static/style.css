@@ -1,10 +1,23 @@
 /* =========================
    RESET
 ========================= */
+
+:root { color-scheme: dark; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top left, #0f2a44, #020b13 55%, #000);
+}
+
+
 * {
     box-sizing: border-box;
     font-family: Arial, Helvetica, sans-serif;
 }
+
+
 
 /* =========================
    BODY (APENAS FUNDO)

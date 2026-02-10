@@ -2,6 +2,16 @@
    ADMIN — ADMINISTRAÇÃO DE ESCALAS
 ========================= */
 
+:root { color-scheme: dark; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top left, #0f2a44, #020b13 55%, #000);
+}
+
+
 /* Página */
 .admin-escalas-page {
     min-height: 100vh;
