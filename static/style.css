@@ -741,3 +741,38 @@ a.card:hover {
   border-radius: 10px;
   cursor: pointer;
 }
+
+
+/* iOS: corrigir date/time sem quebrar o dark do sistema */
+input[type="date"],
+input[type="time"]{
+  -webkit-appearance: none;
+  appearance: none;
+
+  width: 100%;
+  height: 44px;
+  padding: 11px;
+  border-radius: 8px;
+  border: 1px solid #2b2f35;
+  background-color: #15181c;
+  color: #ffffff;
+
+  font-size: 16px;     /* evita zoom no iPhone */
+  line-height: 1.2;
+
+  /* 🔥 força o esquema correto só nesses campos */
+  color-scheme: dark;
+}
+
+/* texto interno alinhado */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value{
+  text-align: left;
+}
+
+/* ícone do calendário/relógio no dark */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator{
+  filter: invert(1);
+  opacity: 0.85;
+}
