@@ -510,6 +510,7 @@ def admin_visao_escalas():
         select(
             UsuarioEscala.id.label("UsuarioEscalaId"),
             User.username.label("Username"),
+            User.nomePerfil.label("nomePerfil"),
             Escala.data.label("Data"),
             Escala.evento.label("Evento"),
             Escala.tipo.label("Tipo"),
