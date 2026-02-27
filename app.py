@@ -528,7 +528,7 @@ def admin_visao_escalas():
         )
         .join(User, User.id == UsuarioEscala.user_id)
         .join(Escala, Escala.id == UsuarioEscala.escala_id)
-        .where(Escala.data >= date.today())   # 🔥 AQUI
+        .where(Escala.data >= date.today()) 
         .order_by(Escala.data, User.username)
     )
 
