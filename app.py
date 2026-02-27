@@ -398,17 +398,26 @@ def admin_escalas():
 
         flash("Usuário atribuído à escala com sucesso!", "success")
 
-    # 🔹 Buscar escalas do mês atual
-    hoje = date.today()
-    mes_atual = hoje.month
-    ano_atual = hoje.year
+    # # 🔹 Buscar escalas do mês atual
+    # hoje = date.today()
+    # mes_atual = hoje.month
+    # ano_atual = hoje.year
+
+    # escalas = (
+    #     Escala.query
+    #     .filter(
+    #         extract("month", Escala.data) == mes_atual,
+    #         extract("year", Escala.data) == ano_atual
+    #     )
+    #     .order_by(Escala.data)
+    #     .all()
+    # )
+
+    # 🔹 Buscar escalas futuras (a partir de hoje)
 
     escalas = (
         Escala.query
-        .filter(
-            extract("month", Escala.data) == mes_atual,
-            extract("year", Escala.data) == ano_atual
-        )
+        .filter(Escala.data >= date.today())
         .order_by(Escala.data)
         .all()
     )
