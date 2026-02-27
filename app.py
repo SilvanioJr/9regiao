@@ -528,10 +528,7 @@ def admin_visao_escalas():
         )
         .join(User, User.id == UsuarioEscala.user_id)
         .join(Escala, Escala.id == UsuarioEscala.escala_id)
-        .where(
-            extract("month", Escala.data) == mes_atual,
-            extract("year", Escala.data) == ano_atual
-        )
+        .where(Escala.data >= date.today())   # 🔥 AQUI
         .order_by(Escala.data, User.username)
     )
 
